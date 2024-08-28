@@ -70,7 +70,8 @@ class Aptamer_match():
 
     
     def create_dict_d(self,):
-        '''Create dictionary containing for each possible length d = |i-j| all base pairs with length d identified solving the subgraph matching problem
+        '''Create dictionary containing for each possible length d = |i-j| all base pairs with length d 
+            identified solving the subgraph matching problem
         '''
         self.dict_d = {}
         
@@ -113,12 +114,22 @@ class Aptamer_match():
 
     
     def fit_fold(self,sequence=[] , n_tmpl=4, l_fix=0):
-            ''' Solve subgraph matching problem
+            """
+            Solves the subgraph matching problem.
+
             Args:
-                seq: the sequence to fold
-                n_tmpl: length template for subgraph matching. Default is 4
-                l_fix =  number of fixed base pairs in the initial stem. Default is 0.
-            '''
+                seq (str): The sequence to be folded.
+                n_tmpl (int): The template length used for subgraph matching. Default is 4.
+                l_fix (int): The number of fixed base pairs in the initial stem. Default is 0.
+
+            Results:
+                self.bps (set): A set containing all non-isolated base pairs.
+                self.dict_Sij (dict): A dictionary where each key is a base pair (i, j) identified by solving the graph matching problem. 
+                                    The corresponding value is a list of all possible base pairs (i', j') such that i < i' < j' < j.
+                self.dict_d (dict): A dictionary where each key is a possible distance d = |i - j| (the length of a base pair) and the value 
+                                    is a list of all base pairs of that length identified by solving the subgraph matching problem.
+            """
+
             self.l_fix= l_fix # number of fixed base pairs 
             self.n_tmpl = n_tmpl # lenght template 
             self.n_wrld = len(sequence) # length sequence

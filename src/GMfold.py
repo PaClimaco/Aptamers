@@ -1,5 +1,11 @@
-"""Python implementation of MGfold to predict nucleic acid secondary structure."""
+"""Python implementation of gmfold to predict secondary structure of single-stranded DNA sequences
 
+This script is based on code from the following open-source repository:
+Repository: https://github.com/Lattice-Automation/seqfold
+License: MIT License
+
+Significant modifications have been made to the original code to adapt it for our paper.
+"""
 
 import sys
 import math
@@ -8,18 +14,16 @@ import numpy as np
 from dna import DNA_ENERGIES
 from Types import Energies, Cache
 from graph_matching import  Aptamer_match
-from mg_energy_functions import _bulge, _hairpin, mg_multi_branch, all_combinations, open_ending_branch, _stack, _pair, _internal_loop, Struct
+from gm_energy_functions import _bulge, _hairpin, gm_multi_branch, all_combinations, open_ending_branch, _stack, _pair, _internal_loop, Struct
 
 
 
 
 STRUCT_DEFAULT = Struct(-math.inf)
 STRUCT_NULL = Struct(math.inf)
-
-
 Structs = List[List[Struct]]
 
-def mg_s_matrix(seq: str, structs: List[Struct], size = None):
+def gm_s_matrix(seq: str, structs: List[Struct], size = None):
     """Compute structural matrix of the DNA sequence.
     Args:
         seq: The sequence to fold
@@ -46,11 +50,11 @@ def mg_s_matrix(seq: str, structs: List[Struct], size = None):
                 M[j,i] = 1
     return M
 
-def mgfold(seq: str, temp: float = 37.0, l_fix = 0, n_branches = 4) -> List[Struct]:
+def gmfold(seq: str, temp: float = 37.0, l_fix = 0, n_branches = 4) -> List[Struct]:
     """Fold the DNA sequence and return the lowest free energy score.
     Args:
-        seq: The sequence to fold.
-        temp: The temperature the fold takes place in, in Celcius.
+        seq: the sequence to fold.
+        temp: the temperature the fold takes place in, in Celcius.
         l_fix: length of initial stem. Forces the first l_fix nucleotides to base pair with the last l_fix nucleotides.
         n_branches: amount of branches to consider when computing multi-branch loops
     Returns:
@@ -68,10 +72,8 @@ def mgfold(seq: str, temp: float = 37.0, l_fix = 0, n_branches = 4) -> List[Stru
     e_cache,   min_struct, min_ene= _cache(seq, temp, S, D, l_fix=l_fix, n_branches= n_branches)
     
     n = len(seq)
-    emap = DNA_ENERGIES 
-    
     branches = []   
-    # Consider configurations ending with an open loop    
+    # Compute energy of configurations ending with an open loop    
     if (e_cache[0][n-1].e > min_ene or e_cache[0][n-1]== STRUCT_DEFAULT) and l_fix == 0:
         
         # Exclude branches with positive energy value
@@ -79,25 +81,25 @@ def mgfold(seq: str, temp: float = 37.0, l_fix = 0, n_branches = 4) -> List[Stru
                 if e_cache[bp[0]][bp[1]].e < 0:
                     branches.append(bp)
                     
-        # Compute all possible compatible branches configurations consisting up to n_branches
+        # Compute energy all possible compatible branches configurations consisting up to n_branches
         combos = all_combinations(branches, r2 =n_branches)  
         for combo in combos:                         
-                        e3_test =  open_ending_branch( seq,0,n-1,temp, e_cache, emap, S, combo)
+                        e3_test =  open_ending_branch(e_cache, combo)
                         if e3_test and e3_test.e < e_cache[min_struct[0]][min_struct[1]].e:
                                 e_cache[0][n-1] = e3_test
                                 min_struct = (0,n-1)           
 
-    return mg_traceback(min_struct[0], min_struct[1], e_cache, l_fix)
+    return gm_traceback(min_struct[0], min_struct[1], e_cache, l_fix)
 
 
 
 
-def mg_dot_bracket(seq: str, structs: List[Struct]) -> str:
+def gm_dot_bracket(seq: str, structs: List[Struct]) -> str:
     """Get the dot bracket notation for a secondary structure.
     Args:
-        structs: The list of structures defining the secondary structure of the input sequence
+        structs: the list of faces defining the secondary structure of the input sequence
     Returns:
-        str: The dot bracket notation of the secondary structure
+        str: the dot bracket notation of the secondary structure
     """
 
     result = ["."] * len(seq)
@@ -138,8 +140,8 @@ def _cache(seq: str, temp: float = 37.0, S= None, D = None, l_fix = 0, n_branche
     for _ in range(n):
         e_cache.append([STRUCT_DEFAULT] * n)
     
-    # fill the cache
-    non_maximal = set([])
+    # fill e_cache
+    non_branches = set([])
     min_ene = np.inf
     min_struct = None
     
@@ -147,7 +149,7 @@ def _cache(seq: str, temp: float = 37.0, S= None, D = None, l_fix = 0, n_branche
     if l_fix ==0:
         for d in sorted(list(D.keys()), key= int):
             for bp in set(D[d]):
-                e, non_maximal =  _e(seq, bp[0], bp[1], temp, e_cache, emap, S, non_maximal, n_branches)
+                e, non_branches =  _e(seq, bp[0], bp[1], temp, e_cache, emap, S, non_branches, n_branches)
                 if e.e  < min_ene:
                     min_struct = bp
                     min_ene = e.e
@@ -178,7 +180,7 @@ def _cache(seq: str, temp: float = 37.0, S= None, D = None, l_fix = 0, n_branche
                         e2= Struct(e2_test, e2_test_type, [(i1, j1)])
                     e_cache[i][j] = e2
                 else:
-                    e, non_maximal =  _e(seq, bp[0], bp[1], temp, e_cache, emap, S, non_maximal, n_branches)
+                    e, non_branches =  _e(seq, bp[0], bp[1], temp, e_cache, emap, S, non_branches, n_branches)
                 if e.e  < min_ene:
                     min_struct = bp
                     min_ene = e.e
@@ -195,23 +197,20 @@ def _e(
     e_cache: Structs,
     emap: Energies,
     S,
-    non_maximal = set,
+    non_branches = set,
     n_branches = None
 ):
     """Find, store and return the minimum free energy of the structure between i and j
-
-    If i and j don't bp, store and return INF.
-    See: Figure 2B of Zuker, 1981
-
     Args:
         seq: The sequence being folded
         i: The start index
         j: The end index (inclusive)
         temp: The temperature in Kelvin
         e_cache: Free energy cache for if i and j bp. INF otherwise
-        
         emap: Energy map for DNA
-
+        S: dictionary containing, for each base pair (i,j) all possible base pairs (i',j') such that i<i'<j'<j.
+        non_branches: set of base pairs (i,j) to not consider as possible branches when computing multi_branch loops
+        n_branches: amount of branches to consider when computing multi-branch loops
     Returns:
         float: The minimum energy folding structure possible between i and j on seq
     """
@@ -219,10 +218,6 @@ def _e(
     if e_cache[i][j] != STRUCT_DEFAULT:
         return e_cache[i][j]
     
-    # the ends must basepair for V(i,j)
-    if emap.COMPLEMENT[seq[i]] != seq[j]:
-        e_cache[i][j] = STRUCT_NULL
-        return e_cache[i][j]
     
     # if the basepair is isolated, and the seq large, penalize at 1,600 kcal/mol
     # heuristic for speeding this up
@@ -241,17 +236,16 @@ def _e(
     e1 = Struct(_hairpin(seq, i, j, temp, emap), "HAIRPIN:" + pair)
     if j - i == 4:  # small hairpin; 4bp
         e_cache[i][j] = e1
-        return e_cache[i][j], non_maximal
+        return e_cache[i][j], non_branches
 
-    # E2 = min{FL(i, j, i', j') + V(i', j')}, i<i'<j'<j
-    # stacking region or bulge or interior loop; Figure 2A(2)
-    # j-i=d>4; various pairs i',j' for j'-i'<d
+    # E2 = min{FL(i, j, i', j') + e(i', j')}, i<i'<j'<j
     n = len(seq)
     e2 = Struct(math.inf)
     key = '({}, {})'.format(*(i,j))
     for bp in S[key]:
             i1 = bp[0]
             j1 = bp[1]
+            
             # i1 and j1 must match
             if emap.COMPLEMENT[seq[i1]] != seq[j1]:
                 continue
@@ -296,37 +290,35 @@ def _e(
                 # it's basically a hairpin, only outside bp match
                 continue
 
-            # add V(i', j')
+            # add e(i', j')
             e2_test += e_cache[i1][j1].e
             if e2_test != -math.inf and e2_test < e2.e:
                 e2 = Struct(e2_test, e2_test_type, [(i1, j1)])
             
 
-    # E3 = min{W(i+1,i') + W(i'+1,j-1)}, i+1<i'<j-2
-    
+    # E3 = min{FB(i, j, branches) + \sum_{(i',j') \in branches}e(i', j')} with i<i'<j'<j
     e3 = STRUCT_NULL
     
     if not isolated_outer or not i or j == len(seq) - 1:
-        branches = list( set(S[key])-non_maximal)
+        branches = list( set(S[key])-non_branches) #Consider all  i<i'<j'<j and remove those that cannot be branches 
             
         if len(branches)>=2:
             combos = all_combinations(branches, r1=2, r2=n_branches )
             
             for combo in combos: 
-                    e3_test = mg_multi_branch(seq, i, j, temp, e_cache, emap, S, list(combo), n_branches)
+                    e3_test = gm_multi_branch(seq, i, j, temp, e_cache, emap, list(combo))
                     
                     if e3_test and e3_test.e < e3.e:
-                            e3 = e3_test            
+                            e3 = e3_test                                  
     e = _min_struct(e1, e2, e3) 
     
+    # If face has positive energy, is a multi-branch or an hairpin, it is not considered as a branch candidate in multi-branch loops
     if e.e >0 or e == e3 or e ==e1:
-        non_maximal.add((i,j))
+        non_branches.add((i,j)) 
     
     e_cache[i][j] = e
 
-    return e, non_maximal
-
-
+    return e, non_branches
 
 
 
@@ -346,45 +338,34 @@ def _min_struct(*structs: Struct) -> Struct:
             s = struct
     return s
 
-def mg_traceback(i: int, j: int, e_cache: Structs, l_fix) -> List[Struct]:
-    """Traceback thru the V(i,j) and W(i,j) caches to find the structure
-
-    For each step, get to the lowest energy W(i,j) within that block
-    Store the structure in W(i,j)
-    Inc i and j
-    If the next structure is viable according to V(i,j), store as well
-    Repeat
+def gm_traceback(i: int, j: int, e_cache: Structs, l_fix) -> List[Struct]:
+    """Traceback thru the e(i,j) caches to find the structure with minimal free energy
 
     Args:
         i: The leftmost index to start searching in
         j: The rightmost index to start searching in
         e_cache: Energies where i and j bond
-        w_cache: Energies/sub-structures between or with i and j
+        l_fix: length of initial stem. Forces the first l_fix nucleotides to base pair with the last l_fix nucleotides.
 
     Returns:
         A list of Structs in the final secondary structure
     """
 
-    # move i,j down-left to start coordinates
+    
     structs: List[Struct] = []
     if l_fix > 1:
-  
-        for k in range(1,l_fix):
-            
+        for k in range(1,l_fix): # if stem the e(i,j) pints at e(i+1,j-1) for (i,j) that  are in the stem
             s = e_cache[k-1][len(e_cache)-k]
             s.ij[0] = k, len(e_cache)-1-k
-  
         i = 0 
         j = len(e_cache)-1
             
     elif l_fix == 1:
         i = 0
-        j = len(e_cache)-1
-       
-    #structs = _trackback_energy(structs)
+        j = len(e_cache)-1 
+
     while True:
         s = e_cache[i][j]
-
         structs.append(s.with_ij([(i, j)]))
 
         # it's a hairpin, end of structure
@@ -403,7 +384,7 @@ def mg_traceback(i: int, j: int, e_cache: Structs, l_fix) -> List[Struct]:
         structs = _trackback_energy(structs)
         branches: List[Struct] = []
         for i1, j1 in s.ij:
-            tb = mg_traceback(i1, j1, e_cache, 0)
+            tb = gm_traceback(i1, j1, e_cache, 0)
             if tb and tb[0].ij:
                 e_sum += e_cache[i1][j1].e
                 branches += tb
@@ -417,7 +398,7 @@ def mg_traceback(i: int, j: int, e_cache: Structs, l_fix) -> List[Struct]:
     return _trackback_energy(structs)
 
 def _trackback_energy(structs: List[Struct]) -> List[Struct]:
-    """Add energy to each structure, based on how it's W(i,j) differs from the one after
+    """Add energy to each structure, based on how the e(i,j) differs from the one after
 
     Args:
         structs: The structures for whom energy is being calculated

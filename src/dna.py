@@ -1,5 +1,8 @@
-"""DNA enthalpy and entropy change parameters."""
-
+"""DNA enthalpy and entropy change parameters.
+This script includes code sourced from the following open-source repository:
+Repository: https://github.com/Lattice-Automation/seqfold
+License: MIT License
+"""
 from typing import Any, Dict, Tuple
 import sys
 import os

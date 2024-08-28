@@ -1,13 +1,20 @@
-"""Predict nucleic acid secondary structure"""
+"""Python implementation of Seqfold 2.0 to predict secondary structure of single-stranded DNA sequences
+
+This script is based on the orginial Seqfold code from the following open-source repository:
+Repository: https://github.com/Lattice-Automation/seqfold
+License: MIT License
+
+
+Specific functions of the code that were adapted from the above repository: _internal_loop, gm_multi_branch fold_2, _cache, _v, _internal_loop and _multi_branch
+"""
+
 import math
-from typing import List, Tuple
 import sys
 import math
 from typing import List, Tuple
 import numpy as np
 from dna import DNA_ENERGIES
-from tqdm import tqdm
-sys.path.append(r'C:\Users\clima\Desktop\Aptamers\src')
+sys.path.append(r'.\src')
 from Types import Energies, Cache
 from graph_matching import  Aptamer_match
 
@@ -63,13 +70,12 @@ def fold_2(seq: str, temp: float = 37.0) -> List[Struct]:
 
     Args:
         seq: The sequence to fold
-
-    Keyword Args:
         temp: The temperature the fold takes place in, in Celcius
 
     Returns:
         List[Struct]: A list of structures. Stacks, bulges, hairpins, etc.
     """
+     # Solve graph matching problem
     APT = Aptamer_match()
     APT.fit_fold( sequence=seq ,  n_tmpl=4, l_fix= 0 )
     S = APT.dict_Sij
@@ -86,8 +92,6 @@ def dg(seq: str, temp: float = 37.0) -> float:
 
     Args:
         seq: The sequence to fold
-
-    Keyword Args:
         temp: The temperature to fold at
 
     Returns:
@@ -98,27 +102,6 @@ def dg(seq: str, temp: float = 37.0) -> float:
     return round(sum(s.e for s in structs), 2)
 
 
-def dg_cache(seq: str, temp: float = 37.0) -> Cache:
-    """Fold a nucleic acid sequence and return the estimated dg of each (i,j) pairing.
-
-    Args:
-        seq: The nucleic acid sequence to fold
-
-    Keyword Args:
-        temp: The temperature to fold at
-
-    Returns:
-        Cache: A 2D matrix where each (i, j) pairing corresponds to the
-            minimum free energy between i and j
-    """
-
-    _, w_cache = _cache(seq, temp)
-
-    cache: Cache = []
-    for row in w_cache:
-        cache.append([s.e for s in row])
-
-    return cache
 
 
 def dot_bracket(seq: str, structs: List[Struct]) -> str:
@@ -149,9 +132,8 @@ def _cache(seq: str, temp: float = 37.0, S = None) -> Tuple[Structs, Structs]:
 
     Args:
         seq: The sequence to fold
-
-    Keyword Args:
         temp: The temperature to fold at
+        S: dictionary containing, for each base pair (i,j) identified solving the subgraph matching problem, all possible base pairs (i',j') such that i<i'<j'<j.
 
     Returns:
         (Structs, Structs): The w_cache and the v_cache for traversal later
@@ -184,31 +166,26 @@ def _cache(seq: str, temp: float = 37.0, S = None) -> Tuple[Structs, Structs]:
     for _ in range(n):
         v_cache.append([STRUCT_DEFAULT] * n)
         w_cache.append([STRUCT_DEFAULT] * n)
-        
-    #for j in range(3, n):
-    
+
+    # fill v_cache following to specific order
     for d in range(1, n):
         for i in range(n - d-3):  
                     j = i + d+ 3
-                    
                     if j - i < 4:
                         w_cache[i][j] = STRUCT_NULL
                         v_cache[i][j]= STRUCT_NULL
                         
                     else:
-                
                         v_cache[i][j] = _v(seq, i, j, temp, v_cache, w_cache, emap, S)
                         if v_cache[i][j].e <= min_ene:
                                 min_ene = v_cache[i][j].e
                                 w_cache[i][j] = v_cache[i][j]
                 
                         if w_cache[i][j] == STRUCT_DEFAULT :
-                        
                             E3 = v_cache[i][j] 
                             E1 = w_cache[i+1][j]
                             E2 = w_cache[i][j-1]
                             E4 = STRUCT_NULL
-                            
                             for k in range(i + 2, j-2 ):
                                     E4_test = _multi_branch(seq, i, k, j, temp, v_cache, w_cache, emap, False)
                                     if E4_test and E4_test.e < E4.e:
@@ -217,9 +194,6 @@ def _cache(seq: str, temp: float = 37.0, S = None) -> Tuple[Structs, Structs]:
                             w_cache[i][j]   = _min_struct(E1, E2, E3, E4)
                             if w_cache[i][j].e < min_ene:
                                 min_ene = w_cache[i][j].e
-                                
-
-
     return v_cache, w_cache
 
 
@@ -245,7 +219,8 @@ def _v(
         temp: The temperature in Kelvin
         v_cache: Free energy cache for if i and j bp. INF otherwise
         w_cache: Free energy cache for lowest energy structure from i to j. 0 otherwise
-        emap: Energy map for DNA/RNA
+        emap: Energy map for DNA
+        S: dictionary containing, for each base pair (i,j) identified solving the subgraph matching problem, all possible base pairs (i',j') such that i<i'<j'<j.
 
     Returns:
         float: The minimum energy folding structure possible between i and j on seq
@@ -286,8 +261,6 @@ def _v(
     # j-i=d>4; various pairs i',j' for j'-i'<d
     n = len(seq)
     e2 = Struct(math.inf)
-    #for i1 in range(i + 1, j - 4):
-     #   for j1 in range(i1 + 4, j):
     key = '({}, {})'.format(*(i,j))
     for bp in S[key]:
             i1 = bp[0]
@@ -432,15 +405,6 @@ def _stack(
     seq: str, i: int, i1: int, j: int, j1: int, temp: float, emap: Energies
 ) -> float:
     """Get the free energy for a stack.
-
-    Using the indexes i and j, check whether it's at the end of
-    the sequence or internal. Then check whether it's a match
-    or mismatch, and return.
-
-    Two edge-cases are terminal mismatches and dangling ends.
-    The energy of a dangling end is added to the energy of a pair
-    where i XOR j is at the sequence's end.
-
     Args:
         seq: The full folding sequence
         i: The start index on left side of the pair/stack
@@ -705,13 +669,9 @@ def _multi_branch(
     """
 
     if helix:
-       ## seqfold orginal left = _w(seq, i + 1, k, temp, v_cache, w_cache, emap)
-      ## seqfold orginal  right = _w(seq, k + 1, j - 1, temp, v_cache, w_cache, emap)
         left = w_cache[i+1][k]
         right = w_cache[k+1][j-1]
     else:
-      ## seqfold orginal  left = _w(seq, i, k, temp, v_cache, w_cache, emap)
-      ## seqfold orginal  right = _w(seq, k + 1, j, temp, v_cache, w_cache, emap)
         left = w_cache[i][k]
         right = w_cache[k+1][j]
 
@@ -765,18 +725,17 @@ def _multi_branch(
                 elif unpaired_right:
                     de = _stack(seq, -1, i2, j2 + 1, j2, temp, emap)
                     if unpaired_right == 1:
-                        #de = min(_stack(seq, i3, -1, j3, j3 - 1, temp, emap), de) #original
+                        #de = min(_stack(seq, i3, -1, j3, j3 - 1, temp, emap), de) # from seqfold
                         de = min(_stack(seq, j3-1, j3, -1, i3 , temp, emap), de)
             elif (i2, j2) == (i, j):
                 unpaired_left = j2 - j1 - 1
                 unpaired_right = i3 - i2 - 1
 
                 if unpaired_left and unpaired_right:
-                    # de = _stack(seq, i2 - 1, i2, j2 + 1, j2, temp, emap) #original
-                    #de = _stack(seq, i2+1 , i2, j2-1, j2, temp, emap)
+                    # de = _stack(seq, i2 - 1, i2, j2 + 1, j2, temp, emap) # from seqfold
                     de = _stack(seq, j2-1 , j2, i2+1, i2, temp, emap)
                 elif unpaired_right:
-                    #de = _stack(seq, i2+1, i2, -1, j2, temp, emap)
+                    #de = _stack(seq, i2+1, i2, -1, j2, temp, emap) # from seqfold
                     de = _stack(seq, -1, j2, i2+1, i2, temp, emap)
                     if unpaired_right == 1:
                         de = min(_stack(seq, i3 - 1, i3, -1, j3, temp, emap), de)

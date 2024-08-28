@@ -1,4 +1,7 @@
-"""Types shared between dna.py and rna.py
+"""Types shared between dna.py
+This script includes code sourced from the following open-source repository:
+Repository: https://github.com/Lattice-Automation/seqfold
+License: MIT License
 """
 
 from typing import Dict, Optional, Tuple, Union, List
