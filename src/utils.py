@@ -53,5 +53,5 @@ def check_empty_or_short(input_string, threshold = 20):
 def find_substrings(input_string):
     return re.findall(r'____(.*?)____', input_string)[0]
 
-def attach_stems(main_string):
-    return 'GGGACGAC' + main_string + 'GTCGTCCC'
+def attach_stems(main_string, stem1='GGGACGAC', stem2 ='GTCGTCCC' ):
+    return  stem1 + main_string + stem2
