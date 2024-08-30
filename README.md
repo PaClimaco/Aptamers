@@ -38,7 +38,7 @@ Contact climaco@ins.uni-bonn for questions about code and data.
 |    ├── Types.py                       # Script defining custom data types for DNA folding operations
 |    ├── utils.py                       # Utility script with helper functions used across DNA folding workflows
 
-└── environment.txt            # python packages required to run code.
+└── environment.yml            # python environment with packages required to run code.
 └── README.md                   # Project README file.
 
 ```

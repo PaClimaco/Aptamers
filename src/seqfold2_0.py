@@ -83,7 +83,8 @@ def fold_2(seq: str, temp: float = 37.0) -> List[Struct]:
     v_cache, w_cache = _cache(seq, temp, S)
     n = len(seq)
    
-
+    #print(w_cache[4][41])
+    #print(w_cache[23][39])
     # get the minimum free energy structure out of the cache
     return _traceback(0, n-1, v_cache, w_cache)
 
@@ -316,7 +317,7 @@ def _v(
     # E3 = min{W(i+1,i') + W(i'+1,j-1)}, i+1<i'<j-2
     e3 = STRUCT_NULL
     if not isolated_outer or not i or j == len(seq) - 1:
-        for k in range(i + 1, j - 1):
+        for k in range(i + 2, j - 1):
             e3_test = _multi_branch(seq, i, k, j, temp, v_cache, w_cache, emap, True)
             if e3_test and e3_test.e < e3.e:
                 e3 = e3_test
@@ -698,13 +699,14 @@ def _multi_branch(
     # if there's a helix, i,j counts as well
     if helix:
         branches.append((i, j))
-
+    #if i ==4 and j==41:
+       # print(branches)
     # count up unpaired bp and asymmetry
     branches_count = len(branches)
     unpaired = 0
     e_sum = 0.0
     for index, (i2, j2) in enumerate(branches):
-            _, j1 = branches[(index - 1) % len(branches)]
+            i1, j1 = branches[(index - 1) % len(branches)]
             i3, j3 = branches[(index + 1) % len(branches)]
 
             # add energy from unpaired bp to the right
@@ -719,26 +721,31 @@ def _multi_branch(
             elif (i3, j3) == (i, j):
                 unpaired_left = i2 - j1 - 1
                 unpaired_right = j3 - j2 - 1
-
                 if unpaired_left and unpaired_right:
                     de = _stack(seq, i2 - 1, i2, j2 + 1, j2, temp, emap)
                 elif unpaired_right:
                     de = _stack(seq, -1, i2, j2 + 1, j2, temp, emap)
                     if unpaired_right == 1:
-                        #de = min(_stack(seq, i3, -1, j3, j3 - 1, temp, emap), de) # from seqfold
                         de = min(_stack(seq, j3-1, j3, -1, i3 , temp, emap), de)
             elif (i2, j2) == (i, j):
                 unpaired_left = j2 - j1 - 1
                 unpaired_right = i3 - i2 - 1
 
                 if unpaired_left and unpaired_right:
-                    # de = _stack(seq, i2 - 1, i2, j2 + 1, j2, temp, emap) # from seqfold
                     de = _stack(seq, j2-1 , j2, i2+1, i2, temp, emap)
                 elif unpaired_right:
-                    #de = _stack(seq, i2+1, i2, -1, j2, temp, emap) # from seqfold
                     de = _stack(seq, -1, j2, i2+1, i2, temp, emap)
                     if unpaired_right == 1:
                         de = min(_stack(seq, i3 - 1, i3, -1, j3, temp, emap), de)
+            elif (i1 ,j1) == (i, j):
+                    unpaired_left = i2 - i1 - 1
+                    unpaired_right = i3 - j2 - 1
+                    if unpaired_left and unpaired_right:
+                        de = _stack(seq, i2-1 , i2, j2+1, j2, temp, emap)
+                    elif unpaired_right:
+                        de = _stack(seq, -1, i2, j2+1, j2, temp, emap)
+                        if unpaired_right == 1:
+                            de = min(_stack(seq, i3 - 1, i3, -1, j3, temp, emap), de)
             else:
                 unpaired_left = i2 - j1 - 1
                 unpaired_right = i3 - j2 - 1
@@ -749,7 +756,6 @@ def _multi_branch(
                     de = _stack(seq, -1, i2, j2 + 1, j2, temp, emap)
                     if unpaired_right == 1:
                         de = min(_stack(seq, i3 - 1, i3, -1, j3, temp, emap), de)
-
             e_sum += de
             unpaired += unpaired_right
             assert unpaired_right >= 0

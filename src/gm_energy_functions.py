@@ -421,7 +421,7 @@ def gm_multi_branch(
     unpaired = 0
     e_sum = 0.0
     for index, (i2, j2) in enumerate(branches):
-        _, j1 = branches[(index - 1) % len(branches)]
+        i1, j1 = branches[(index - 1) % len(branches)]
         i3, j3 = branches[(index + 1) % len(branches)]
         # add energy from unpaired bp to the right
         # of the helix as though it was a dangling end
@@ -434,7 +434,6 @@ def gm_multi_branch(
         if (i3, j3) == (i, j):
             unpaired_left = i2 - j1 - 1
             unpaired_right = j3 - j2 - 1
-
             if unpaired_left and unpaired_right:
                 de = _stack(seq, i2 - 1, i2, j2 + 1, j2, temp, emap)
             elif unpaired_right:
@@ -451,6 +450,15 @@ def gm_multi_branch(
                 de = _stack(seq, -1, j2, i2+1, i2, temp, emap)
                 if unpaired_right == 1:
                     de = min(_stack(seq, i3 - 1, i3, -1, j3, temp, emap), de)
+        elif (i1 ,j1) == (i, j):
+                unpaired_left = i2 - i1 - 1
+                unpaired_right = i3 - j2 - 1
+                if unpaired_left and unpaired_right:
+                    de = _stack(seq, i2-1 , i2, j2+1, j2, temp, emap)
+                elif unpaired_right:
+                    de = _stack(seq, -1, i2, j2+1, j2, temp, emap)
+                    if unpaired_right == 1:
+                        de = min(_stack(seq, i3 - 1, i3, -1, j3, temp, emap), de)
         else:
             unpaired_left = i2 - j1 - 1
             unpaired_right = i3 - j2 - 1
