@@ -77,7 +77,7 @@ def fold_2(seq: str, temp: float = 37.0) -> List[Struct]:
     """
      # Solve graph matching problem
     APT = Aptamer_match()
-    APT.fit_fold( sequence=seq ,  n_tmpl=4, l_fix= 0 )
+    APT.fit_fold( sequence=seq ,  n_tmpl=4, l_fix=0)
     S = APT.dict_Sij
     
     v_cache, w_cache = _cache(seq, temp, S)

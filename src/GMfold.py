@@ -91,6 +91,48 @@ def gmfold(seq: str, temp: float = 37.0, l_fix = 0, n_branches = 4) -> List[Stru
 
     return gm_traceback(min_struct[0], min_struct[1], e_cache, l_fix)
 
+def gmfold_from_bracket(seq: str, temp: float = 37.0, l_fix = 0, n_branches = 4,brackets='') -> List[Struct]:
+    """Fold the DNA sequence and return the lowest free energy score.
+    Args:
+        seq: the sequence to fold.
+        temp: the temperature the fold takes place in, in Celcius.
+        l_fix: length of initial stem. Forces the first l_fix nucleotides to base pair with the last l_fix nucleotides.
+        n_branches: amount of branches to consider when computing multi-branch loops
+    Returns:
+        List[Struct]: A list of structures. Stacks, bulges, hairpins, etc.
+    """
+    
+    # Solve graph matching problem
+    APT = Aptamer_match()
+    APT.fit_fold_from_bracket( sequence=seq ,  n_tmpl=4, l_fix= l_fix, brack=brackets )
+    S = APT.dict_Sij
+    D = APT.dict_d
+    bps = APT.bps
+
+    # Fill e_cache
+    e_cache,   min_struct, min_ene= _cache(seq, temp, S, D, l_fix=l_fix, n_branches= n_branches)
+    
+    n = len(seq)
+    branches = []   
+    # Compute energy of configurations ending with an open loop    
+    if (e_cache[0][n-1].e > min_ene or e_cache[0][n-1]== STRUCT_DEFAULT) and l_fix == 0:
+        
+        # Exclude branches with positive energy value
+        for bp in list(set(bps)):
+                if e_cache[bp[0]][bp[1]].e :
+                    branches.append(bp)
+                    
+        # Compute energy all possible compatible branches configurations consisting up to n_branches
+        combos = all_combinations(branches, r2 =n_branches)  
+        for combo in combos:                         
+                        e3_test =  open_ending_branch(e_cache, combo)
+                        if e3_test and e3_test.e < e_cache[min_struct[0]][min_struct[1]].e:
+                                e_cache[0][n-1] = e3_test
+                                min_struct = (0,n-1)           
+
+    return gm_traceback(min_struct[0], min_struct[1], e_cache, l_fix)
+
+
 
 
 

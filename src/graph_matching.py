@@ -54,7 +54,36 @@ class Aptamer_match():
                     self.B_g[i, j] = 1
                     self.B_g[j, i] = 1
         return
+    
+    
+    def build_BG_matrix_from_bracket(self, s=''):
+        """
+        Builds a binary adjacency matrix representing the BG motif structure.
+        """
+        final_struct=[]
+        holder=[]
+        height = 0
+        index=0
+        for i in s:
+    
+            if i == '(':
+                holder.append(index)
+                height= height+1
+            if i == ')':
+                height= height-1
+                i=holder[height]
+                j=index
+                final_struct.append([i,j])
+                holder.pop()
 
+            index +=1    
+
+        self.B_g = np.zeros((self.n_wrld, self.n_wrld), dtype=int)
+        for p in final_struct:
+            self.B_g[p[0], p[1]] = 1
+            self.B_g[p[1], p[0]] = 1
+
+        return
 
     def apt_filter(self, ):
             """
@@ -139,6 +168,50 @@ class Aptamer_match():
             self.apt_filter()                
             self.bps = set([])
             
+            #Store base pairs found solving the graph matching problem
+            for mot in self.motifs:
+                for bp in mot:
+                    self.bps.add(bp)
+                    
+            
+            # Include initial stem in base pair list        
+            if l_fix >0:
+                for k in range(l_fix):
+                    self.bps.add((k, self.n_wrld-1-k))                
+        
+            self.bps = list(self.bps) 
+            # Organize base pairs in dictionary based on their length
+            self.create_dict_d()
+            # Organize base pairs in dictionary. For each base pair find all base pairs included in it.
+            self.create_dict_Sij()
+
+    def fit_fold_from_bracket(self,sequence=[] , n_tmpl=4, l_fix=0, brack=''):
+            """
+            Solves the subgraph matching problem.
+
+            Args:
+                seq (str): The sequence to be folded.
+                n_tmpl (int): The template length used for subgraph matching. Default is 4.
+                l_fix (int): The number of fixed base pairs in the initial stem. Default is 0.
+
+            Results:
+                self.bps (set): A set containing all non-isolated base pairs.
+                self.dict_Sij (dict): A dictionary where each key is a base pair (i, j) identified by solving the graph matching problem. 
+                                    The corresponding value is a list of all possible base pairs (i', j') such that i < i' < j' < j.
+                self.dict_d (dict): A dictionary where each key is a possible distance d = |i - j| (the length of a base pair) and the value 
+                                    is a list of all base pairs of that length identified by solving the subgraph matching problem.
+            """
+
+            self.l_fix= l_fix # number of fixed base pairs 
+            self.n_tmpl = n_tmpl # lenght template 
+            self.n_wrld = len(sequence) # length sequence
+            self.sequence = sequence # orginal sequnce in capital letters
+            self.convert_sequence_to_numeric() 
+            self.build_BG_matrix_from_bracket(s=brack)
+            #print(self.B_g)
+            #self.apt_filter()                
+            self.bps = set([])
+            self.apt_filter() 
             #Store base pairs found solving the graph matching problem
             for mot in self.motifs:
                 for bp in mot:
